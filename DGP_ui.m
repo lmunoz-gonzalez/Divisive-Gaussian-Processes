@@ -1,6 +1,6 @@
-function [NMSE_EPDGP, NMAE_EPDGP, NLPD_EPDGP,NMSE_MCMC, NMAE_MCMC, NLPD_MCMC, NMSE_GP, NMAE_GP, NLPD_GP] = DGP_ui(x_tr,y_tr,x_tst,y_tst,pl);
+function [Results] = DGP_ui(x_tr,y_tr,x_tst,y_tst,pl);
 
-% This function trains EP-DGP and MCMC-DGP for a training data given in
+% This function trains L-DGP, EP-DGP, and MCMC-DGP for a training data given in
 % x_tr and y_tst and evaluates the predictions for test data (given in
 % x_tst and y_tst) in terms of NMSE, NMAE, and NLPD. To initialize the
 % hyperparameters, a standard GP is trained first. The performance of the
@@ -15,15 +15,16 @@ function [NMSE_EPDGP, NMAE_EPDGP, NLPD_EPDGP,NMSE_MCMC, NMAE_MCMC, NLPD_MCMC, NM
 %       pl=0 ->don't show plot (default option)
 
 %OUTPUTS: 
-% - NMSE_EPDGP: Normalized mean squared error for EP-DGP method evaluated on the test set.
-% - NMAE_EPDGP: Normalized mean absolute error for EP-DGP method evaluated on the test set.
-% - NLPD_EPDGP: Negative Log Predictive Density for EP-DGP method evaluated on the test set. 
-% - NMSE_MCMC: Normalized mean squared error for MCMC-DGP method evaluated on the test set.
-% - NMAE_MCMC: Normalized mean absolute error for MCMC-DGP method evaluated on the test set.
-% - NLPD_MCMC: Negative Log Predictive Density for MCMC-DGP method evaluated on the test set. 
-% - NMSE_GP: Normalized mean squared error for the standard GP evaluated on the test set.
-% - NMAE_GP: Normalized mean absolute error for the standard GP evaluated on the test set.
-% - NLPD_GP: Negative Log Predictive Density for the standard GP evaluated on the test set. 
+% - Results: a structure that contains the following fields:
+%     - NMSE_EPDGP: Normalized mean squared error for EP-DGP method evaluated on the test set.
+%     - NMAE_EPDGP: Normalized mean absolute error for EP-DGP method evaluated on the test set.
+%     - NLPD_EPDGP: Negative Log Predictive Density for EP-DGP method evaluated on the test set. 
+%     - NMSE_MCMC: Normalized mean squared error for MCMC-DGP method evaluated on the test set.
+%     - NMAE_MCMC: Normalized mean absolute error for MCMC-DGP method evaluated on the test set.
+%     - NLPD_MCMC: Negative Log Predictive Density for MCMC-DGP method evaluated on the test set. 
+%     - NMSE_GP: Normalized mean squared error for the standard GP evaluated on the test set.
+%     - NMAE_GP: Normalized mean absolute error for the standard GP evaluated on the test set.
+%     - NLPD_GP: Negative Log Predictive Density for the standard GP evaluated on the test set. 
 
 if nargin < 5
     pl = 0;
@@ -65,9 +66,9 @@ fprintf('Computing standard GP predictions\n');
 mu_tst_GP = mu_tst_GP + meanp;
 
 %Compute NMSE, NMAE, and NLPD on the test data
-NMSE_GP = mean( (y_tst - mu_tst_GP).^2)/mean( (y_tst - meanp).^2);
-NMAE_GP = mean(abs(y_tst - mu_tst_GP))/mean(abs(y_tst - meanp));
-NLPD_GP = -0.5*mean( - ((mu_tst_GP - y_tst).^2)./(S2_tst_GP) - log(2*pi) - log(S2_tst_GP));
+Results.NMSE_GP = mean( (y_tst - mu_tst_GP).^2)/mean( (y_tst - meanp).^2);
+Results.NMAE_GP = mean(abs(y_tst - mu_tst_GP))/mean(abs(y_tst - meanp));
+Results.NLPD_GP = -0.5*mean( - ((mu_tst_GP - y_tst).^2)./(S2_tst_GP) - log(2*pi) - log(S2_tst_GP));
 
 if ((D==1) && (pl==1))
     x_plot = linspace(min(x_tr),max(x_tr),150)';
@@ -76,9 +77,9 @@ if ((D==1) && (pl==1))
     figure
     plot(x_tr,y_tr + meanp,'+')
     hold on
-    plot(x_plot,mu_plot)
-    plot(x_plot,mu_plot + 2.*sqrt(S2_plot),'--')
-    plot(x_plot,mu_plot - 2.*sqrt(S2_plot),'--')
+    plot(x_plot,mu_plot,'b')
+    plot(x_plot,mu_plot + 2.*sqrt(S2_plot),'b--')
+    plot(x_plot,mu_plot - 2.*sqrt(S2_plot),'b--')
 end
 
 
@@ -119,10 +120,10 @@ mu_tst = predictMedian(mu_f,s2_f,mu_g,s2_g,k_noise);
 mu_tst = mu_tst +  meanp;
 
 %Compute NMSE, NMAE, and NLPD on the test data
-NMSE_EPDGP = mean((y_tst - mu_tst).^2)/mean((y_tst - meanp).^2);
-NMAE_EPDGP = mean(abs(y_tst - mu_tst))/mean(abs(y_tst - meanp));
+Results.NMSE_EPDGP = mean((y_tst - mu_tst).^2)/mean((y_tst - meanp).^2);
+Results.NMAE_EPDGP = mean(abs(y_tst - mu_tst))/mean(abs(y_tst - meanp));
 [nlpd] = predictNLPD(mu_f,s2_f,mu_g,s2_g,k_noise,y_tst-meanp);
-NLPD_EPDGP = mean(nlpd); 
+Results.NLPD_EPDGP = mean(nlpd); 
 
 %Plot predictions if data sets is unidimensional
 if ((D==1) && (pl==1))
@@ -134,6 +135,61 @@ if ((D==1) && (pl==1))
     plot(x_plot,mu_plot,'r')
     plot(x_plot,upperQ_plot,'--r')
     plot(x_plot,lowerQ_plot,'--r')
+end
+
+
+%% L-DGP
+
+%Covariance functions (with ISO exponential kernel)
+covfunc1 = {'covSum', {'covSEiso','covNoise'}};   %Covariance function for latent function f
+covfunc2 = {'covSEiso2'}; %Covariance function for latent function g
+
+%Covariance functions (with ARD exponential kernel)
+% covfunc1 = {'covSum', {'covSEard','covNoise'}};   %Covariance function for latent function f
+% covfunc2 = {'covSEard2'}; %Covariance function for latent function g
+
+%Hyperparameter initialization
+NoisePower = exp(2.*loghyper_GP(end));
+SignalPower = exp(2.*loghyper_GP(end-1));
+lengthscales = loghyper_GP(1:end-2);
+mu0 = 2/sqrt(NoisePower);
+k_noise = 4;
+Gpower = (mu0^2)/10;
+loghyperNoise =  [lengthscales; 0.5*log(Gpower); log(mu0)];
+Fpower = SignalPower*(mu0^2)/k_noise;
+loghyperSignal = [lengthscales; 0.5*log(Fpower); 0.5*log(Fpower/4)];
+size_loghyperSignal = length(loghyperSignal);
+
+%Vector of initial hyperparameters
+loghyper = [loghyperSignal; loghyperNoise];
+
+%Train EP-DGP
+fprintf('\nTraining L-DGP............\n');
+[newloghyper] = minimize(loghyper,'LDGP',80,covfunc1,covfunc2,k_noise,x_tr,y_tr);
+
+%Predictions of EP-DGP on the test data
+fprintf('Computing EP-DGP predictions\n');
+[mu_f s2_f mu_g s2_g nlml] = LDGP(newloghyper, covfunc1, covfunc2, k_noise, x_tr, y_tr, x_tst);
+%Prediction of the median
+mu_tst = predictMedian(mu_f,s2_f,mu_g,s2_g,k_noise); 
+mu_tst = mu_tst +  meanp;
+
+%Compute NMSE, NMAE, and NLPD on the test data
+Results.NMSE_LDGP = mean((y_tst - mu_tst).^2)/mean((y_tst - meanp).^2);
+Results.NMAE_LDGP = mean(abs(y_tst - mu_tst))/mean(abs(y_tst - meanp));
+[nlpd] = predictNLPD(mu_f,s2_f,mu_g,s2_g,k_noise,y_tst-meanp);
+Results.NLPD_LDGP = mean(nlpd); 
+
+%Plot predictions if data sets is unidimensional
+if ((D==1) && (pl==1))
+    [mu_f s2_f mu_g s2_g nlml] = EPDGP(newloghyper, covfunc1, covfunc2, k_noise, x_tr, y_tr, x_plot);
+    mu_plot = predictMedian(mu_f,s2_f,mu_g,s2_g,k_noise) + meanp;
+    %Predict quantiles 0.1 and 0.9
+    upperQ_plot = predictQuantile(mu_f,s2_f,mu_g,s2_g,k_noise,0.95) + meanp;
+    lowerQ_plot = predictQuantile(mu_f,s2_f,mu_g,s2_g,k_noise,0.05) +meanp;
+    plot(x_plot,mu_plot,'g')
+    plot(x_plot,upperQ_plot,'--g')
+    plot(x_plot,lowerQ_plot,'--g')
 end
 
 
@@ -182,10 +238,10 @@ mu_tst = predictMedian(mu_f,var_f,mu_g,var_g,k_noise);
 mu_tst = mu_tst +  meanp;
 
 %Calculate NMSE, NMAE, and NLPD
-NMSE_MCMC = mean((y_tst - mu_tst).^2)/mean((y_tst - meanp).^2);
-NMAE_MCMC = mean(abs(y_tst - mu_tst))/mean(abs(y_tst - meanp));
+Results.NMSE_MCMC = mean((y_tst - mu_tst).^2)/mean((y_tst - meanp).^2);
+Results.NMAE_MCMC = mean(abs(y_tst - mu_tst))/mean(abs(y_tst - meanp));
 [nlpd] = predictNLPD(mu_f,var_f,mu_g,var_g,k_noise,y_tst-meanp);
-NLPD_MCMC = mean(nlpd); 
+Results.NLPD_MCMC = mean(nlpd); 
 
 if ((D==1) && (pl==1))
     [Kfss, Kfstar] = feval(covfunc1{:}, loghyperSignal,x_tr, x_plot); % test covariance f   
@@ -200,6 +256,6 @@ if ((D==1) && (pl==1))
     plot(x_plot,mu_plot,'k')
     plot(x_plot,upperQ_plot,'--k')
     plot(x_plot,lowerQ_plot,'--k')
-    title('Standard GP prediction (BLUE), EP-DGP predictions (RED), MCMC-DGP predictions (BLACK)');
+    title('Standard GP prediction (BLUE), EP-DGP predictions (RED), L-DGP predictions (GREEN), MCMC-DGP predictions (BLACK)');
 end
 

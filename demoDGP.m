@@ -9,6 +9,6 @@ load 'Datasets\Wahba.mat'
 %the error bars for the 3 methods (only available for unidimensional data
 %sets).
 pl = 1;
-[NMSE_EPDGP, NMAE_EPDGP, NLPD_EPDGP,NMSE_MCMC, NMAE_MCMC, NLPD_MCMC, NMSE_GP, NMAE_GP, NLPD_GP] = DGP_ui(x_tr,y_tr,x_tst,y_tst,pl);
+Results = DGP_ui(x_tr,y_tr,x_tst,y_tst,pl);
 
 
